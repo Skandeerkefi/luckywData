@@ -1,20 +1,15 @@
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
-const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
-// const cron = require("node-cron"); // Removed
-// const { drawWinnerAuto } = require("./controllers/gwsController"); // Removed
 dotenv.config();
-const GWS = require("./models/GWS");
+
 const fetch = (...args) =>
 	import("node-fetch").then(({ default: fetch }) => fetch(...args));
 
 const app = express();
 const PORT = 3000;
-
-// --- Removed auto draw cron job ---
 
 // Logging Middleware
 app.use((req, res, next) => {
@@ -59,21 +54,13 @@ app.use(
 
 app.use(express.json());
 
-// MongoDB Connection
-mongoose
-	.connect(process.env.MONGO_URI)
-	.then(() => console.log("✅ MongoDB connected"))
-	.catch((err) => console.error("❌ MongoDB connection error:", err));
+// ❌ REMOVED: MongoDB Connection
+// ❌ REMOVED: mongoose
+// ❌ REMOVED: User model
+// ❌ REMOVED: SlotCall model
 
-// Models
-const { User } = require("./models/User");
-const { SlotCall } = require("./models/SlotCall");
-
-// Middleware
-const { verifyToken, isAdmin } = require("./middleware/auth");
-
-// Routes
-const slotCallRoutes = require("./routes/slotCallRoutes");
+// Dummy data storage for users (temporary)
+let users = [];
 
 // Auth Routes
 app.post("/api/auth/register", async (req, res) => {
@@ -83,14 +70,23 @@ app.post("/api/auth/register", async (req, res) => {
 		return res.status(400).json({ message: "Passwords do not match." });
 	}
 
-	const existing = await User.findOne({ kickUsername });
-	const existingRainbet = await User.findOne({ rainbetUsername });
-	if (existing || existingRainbet)
+	const existing = users.find(u => u.kickUsername === kickUsername);
+	const existingRain = users.find(u => u.rainbetUsername === rainbetUsername);
+
+	if (existing || existingRain)
 		return res.status(400).json({ message: "Username already exists." });
 
 	const hashed = await bcrypt.hash(password, 10);
-	const newUser = new User({ kickUsername, rainbetUsername, password: hashed });
-	await newUser.save();
+
+	const newUser = {
+		id: Date.now().toString(),
+		kickUsername,
+		rainbetUsername,
+		password: hashed,
+		role: "user",
+	};
+
+	users.push(newUser);
 
 	res.status(201).json({ message: "User registered." });
 });
@@ -98,25 +94,26 @@ app.post("/api/auth/register", async (req, res) => {
 app.post("/api/auth/login", async (req, res) => {
 	const { kickUsername, password } = req.body;
 
-	const user = await User.findOne({ kickUsername });
+	const user = users.find((u) => u.kickUsername === kickUsername);
 	if (!user) return res.status(404).json({ message: "User not found." });
 
 	const match = await bcrypt.compare(password, user.password);
 	if (!match) return res.status(401).json({ message: "Invalid credentials." });
 
 	const token = jwt.sign(
-		{ id: user._id, role: user.role, kickUsername: user.kickUsername },
+		{ id: user.id, role: user.role, kickUsername: user.kickUsername },
 		process.env.JWT_SECRET,
 		{ expiresIn: "7d" }
 	);
 
 	res.json({
 		token,
-		user: { id: user._id, kickUsername: user.kickUsername, role: user.role },
+		user: { id: user.id, kickUsername: user.kickUsername, role: user.role },
 	});
 });
 
-// Slot Call Routes
+// Routes that still exist
+const slotCallRoutes = require("./routes/slotCallRoutes");
 app.use("/api/slot-calls", slotCallRoutes);
 
 // Affiliates Route
@@ -149,9 +146,10 @@ app.use("/api/leaderboard", leaderboardRoutes);
 
 // Basic health check endpoint
 app.get("/health", (req, res) => {
-	res
-		.status(200)
-		.json({ status: "OK", message: "Roobet Leaderboard API is running" });
+	res.status(200).json({
+		status: "OK",
+		message: "Roobet Leaderboard API is running",
+	});
 });
 
 // Start Server
