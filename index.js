@@ -4,8 +4,8 @@ const dotenv = require("dotenv");
 const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
-const cron = require("node-cron");
-const { drawWinnerAuto } = require("./controllers/gwsController"); // You create this
+// const cron = require("node-cron"); // Removed
+// const { drawWinnerAuto } = require("./controllers/gwsController"); // Removed
 dotenv.config();
 const GWS = require("./models/GWS");
 const fetch = (...args) =>
@@ -14,25 +14,7 @@ const fetch = (...args) =>
 const app = express();
 const PORT = 3000;
 
-// Schedule job to run every minute
-cron.schedule("* * * * *", async () => {
-	console.log("Running giveaway auto-draw job...");
-	const now = new Date();
-
-	try {
-		const giveawaysToDraw = await GWS.find({
-			state: "active",
-			endTime: { $lte: now },
-		}).populate("participants");
-
-		for (const gws of giveawaysToDraw) {
-			await drawWinnerAuto(gws); // call the helper above
-			console.log(`Giveaway ${gws._id} winner drawn automatically.`);
-		}
-	} catch (err) {
-		console.error("Error during auto draw:", err);
-	}
-});
+// --- Removed auto draw cron job ---
 
 // Logging Middleware
 app.use((req, res, next) => {
@@ -56,14 +38,12 @@ const allowedOrigins = [
 	"https://mister-tee.vercel.app/Leaderboards",
 	"https://louiskhz.vercel.app",
 	"https://tacopoju-dun.vercel.app",
-	"https://www.tacopojurewards.com",
-	"https://www.tacopojurewards.com"
+	"https://luckyw.vercel.app",
 ];
 
 app.use(
 	cors({
 		origin: function (origin, callback) {
-			// allow requests with no origin like curl or Postman
 			if (!origin) return callback(null, true);
 			if (allowedOrigins.includes(origin)) {
 				return callback(null, true);
@@ -164,12 +144,7 @@ app.get("/api/affiliates", async (req, res) => {
 const gwsRoutes = require("./routes/gwsRoutes");
 app.use("/api/gws", gwsRoutes);
 
-// Start Server
-app.listen(PORT, () =>
-	console.log(`✅ Server is running at http://localhost:${PORT}`)
-);
 const leaderboardRoutes = require("./routes/leaderboard");
-// Routes
 app.use("/api/leaderboard", leaderboardRoutes);
 
 // Basic health check endpoint
@@ -178,3 +153,8 @@ app.get("/health", (req, res) => {
 		.status(200)
 		.json({ status: "OK", message: "Roobet Leaderboard API is running" });
 });
+
+// Start Server
+app.listen(PORT, () =>
+	console.log(`✅ Server is running at http://localhost:${PORT}`)
+);
