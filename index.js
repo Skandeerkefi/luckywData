@@ -34,6 +34,7 @@ const allowedOrigins = [
 	"https://louiskhz.vercel.app",
 	"https://tacopoju-dun.vercel.app",
 	"https://luckyw.vercel.app",
+	"https://www.luckywrewards.com"
 ];
 
 app.use(
