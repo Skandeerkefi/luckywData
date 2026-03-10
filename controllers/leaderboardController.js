@@ -1,14 +1,5 @@
 const axios = require("axios");
 
-// Helper function to blur usernames
-function blurUsername(username) {
-  if (!username || username.length <= 2) return "***";
-  const firstChar = username.charAt(0);
-  const lastChar = username.charAt(username.length - 1);
-  const blurredPart = "*".repeat(Math.max(0, username.length - 2));
-  return firstChar + blurredPart + lastChar;
-}
-
 // Helper function to get start of day in ISO format
 function getStartOfDay(dateStr) {
   return new Date(dateStr + "T00:00:00.000Z").toISOString();
@@ -27,12 +18,6 @@ function normalizeStartDate(value) {
 function normalizeEndDate(value) {
   if (!value) return undefined;
   return value.includes("T") ? new Date(value).toISOString() : getEndOfDay(value);
-}
-
-// Filter out dice from house games
-function filterDice(player) {
-  if (!player.favoriteGameId) return true;
-  return !player.favoriteGameId.includes("housegames:dice");
 }
 
 function buildRoobetStatsParams({ startDate, endDate }) {
@@ -65,10 +50,9 @@ async function fetchRoobetStats(params) {
 
 function mapAndSortLeaderboardData(rows) {
   const processedData = rows
-    .filter(filterDice)
     .map((player) => ({
       uid: player.uid,
-      username: blurUsername(player.username),
+      username: player.username,
       wagered: player.wagered,
       weightedWagered: player.weightedWagered,
       favoriteGameId: player.favoriteGameId,
@@ -94,7 +78,7 @@ const leaderboardController = {
 
       res.json({
         disclosure:
-          "Your wagers on Roobet will count towards the leaderboard at weighted rules to prevent abuse: RTP <= 97% contributes 100%, RTP > 97% contributes 50%, RTP >= 98% contributes 10%. Only Slots and Provably Fair (house) games count, and Dice is excluded.",
+          "Your wagers on Roobet count toward the leaderboard with weighted rules to prevent abuse: RTP <= 97% contributes 100%, RTP > 97% contributes 50%, RTP >= 98% contributes 10%. Only Slots and Provably Fair (house games) count, and Dice is excluded.",
         data: processedData,
       });
     } catch (error) {
@@ -117,7 +101,7 @@ const leaderboardController = {
 
       res.json({
         disclosure:
-          "Your wagers on Roobet will count towards the leaderboard at weighted rules to prevent abuse: RTP <= 97% contributes 100%, RTP > 97% contributes 50%, RTP >= 98% contributes 10%. Only Slots and Provably Fair (house) games count, and Dice is excluded.",
+          "Your wagers on Roobet count toward the leaderboard with weighted rules to prevent abuse: RTP <= 97% contributes 100%, RTP > 97% contributes 50%, RTP >= 98% contributes 10%. Only Slots and Provably Fair (house games) count, and Dice is excluded.",
         data: processedData,
       });
     } catch (error) {
