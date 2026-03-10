@@ -3,7 +3,11 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
-dotenv.config();
+const mongoose = require("mongoose");
+const path = require("path");
+const { User } = require("./models/User");
+const { SlotCall } = require("./models/SlotCall");
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const fetch = (...args) =>
 	import("node-fetch").then(({ default: fetch }) => fetch(...args));
@@ -55,62 +59,87 @@ app.use(
 
 app.use(express.json());
 
-// ❌ REMOVED: MongoDB Connection
-// ❌ REMOVED: mongoose
-// ❌ REMOVED: User model
-// ❌ REMOVED: SlotCall model
+// Keep model import active so the schema is registered on boot.
+void SlotCall;
 
-// Dummy data storage for users (temporary)
-let users = [];
+const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
+
+if (!mongoUri) {
+	console.error(
+		"❌ Missing MongoDB connection string. Set MONGO_URI (or MONGODB_URI) in your .env file."
+	);
+	process.exit(1);
+}
+
+mongoose
+	.connect(mongoUri)
+	.then(() => console.log("✅ MongoDB connected"))
+	.catch((err) => console.error("❌ MongoDB connection error:", err.message));
 
 // Auth Routes
 app.post("/api/auth/register", async (req, res) => {
-	const { kickUsername, rainbetUsername, password, confirmPassword } = req.body;
+	try {
+		const { kickUsername, rainbetUsername, discordUsername, password, confirmPassword } = req.body;
 
-	if (password !== confirmPassword) {
-		return res.status(400).json({ message: "Passwords do not match." });
+		if (!kickUsername || !rainbetUsername || !discordUsername || !password || !confirmPassword) {
+			return res.status(400).json({ message: "All fields are required." });
+		}
+
+		if (password !== confirmPassword) {
+			return res.status(400).json({ message: "Passwords do not match." });
+		}
+
+		const existing = await User.findOne({
+			$or: [{ kickUsername }, { rainbetUsername }],
+		});
+
+		if (existing) {
+			return res.status(400).json({ message: "Username already exists." });
+		}
+
+		const hashed = await bcrypt.hash(password, 10);
+
+		await User.create({
+			kickUsername,
+			rainbetUsername,
+			discordUsername,
+			password: hashed,
+			role: "user",
+		});
+
+		res.status(201).json({ message: "User registered." });
+	} catch (error) {
+		res.status(500).json({ message: "Registration failed." });
 	}
-
-	const existing = users.find(u => u.kickUsername === kickUsername);
-	const existingRain = users.find(u => u.rainbetUsername === rainbetUsername);
-
-	if (existing || existingRain)
-		return res.status(400).json({ message: "Username already exists." });
-
-	const hashed = await bcrypt.hash(password, 10);
-
-	const newUser = {
-		id: Date.now().toString(),
-		kickUsername,
-		rainbetUsername,
-		password: hashed,
-		role: "user",
-	};
-
-	users.push(newUser);
-
-	res.status(201).json({ message: "User registered." });
 });
 
 app.post("/api/auth/login", async (req, res) => {
-	const { kickUsername, password } = req.body;
+	try {
+		const { kickUsername, password } = req.body;
 
-	const user = users.find((u) => u.kickUsername === kickUsername);
-	if (!user) return res.status(404).json({ message: "User not found." });
+		const user = await User.findOne({ kickUsername });
+		if (!user) return res.status(404).json({ message: "User not found." });
 
-	const match = await bcrypt.compare(password, user.password);
-	if (!match) return res.status(401).json({ message: "Invalid credentials." });
+		const match = await bcrypt.compare(password, user.password);
+		if (!match) return res.status(401).json({ message: "Invalid credentials." });
 
-	const token = jwt.sign(
-		{ id: user.id, role: user.role, kickUsername: user.kickUsername },
-		process.env.JWT_SECRET,
-		{ expiresIn: "7d" }
-	);
+		const token = jwt.sign(
+			{ id: user.id, role: user.role, kickUsername: user.kickUsername },
+			process.env.JWT_SECRET,
+			{ expiresIn: "7d" }
+		);
 
-	res.json({
-		token,
-		user: { id: user.id, kickUsername: user.kickUsername, role: user.role },
-	});
+		res.json({
+			token,
+			user: {
+				id: user.id,
+				kickUsername: user.kickUsername,
+				role: user.role,
+			},
+		});
+	} catch (error) {
+		res.status(500).json({ message: "Login failed." });
+	}
 });
 
 // Routes that still exist
@@ -144,6 +173,15 @@ app.use("/api/gws", gwsRoutes);
 
 const leaderboardRoutes = require("./routes/leaderboard");
 app.use("/api/leaderboard", leaderboardRoutes);
+
+const tournamentRoutes = require("./modules/tournaments/routes/tournament.routes");
+app.use("/api/tournaments", tournamentRoutes);
+
+const slotRoutes = require("./modules/tournaments/routes/slot.routes");
+app.use("/api/slots", slotRoutes);
+
+const matchRoutes = require("./modules/tournaments/routes/match.routes");
+app.use("/api/matches", matchRoutes);
 
 // Basic health check endpoint
 app.get("/health", (req, res) => {

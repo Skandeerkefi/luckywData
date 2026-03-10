@@ -1,12 +1,65 @@
 const GWS = require("../models/GWS");
 const { User } = require("../models/User");
-const fetch = (...args) =>
-	import("node-fetch").then(({ default: fetch }) => fetch(...args));
+const {
+	fetchRoobetAffiliateStatsFixedMonthly,
+	getGwsFixedMonthlyPeriod,
+} = require("./roobetController");
+
+const matchesMaskedUsername = (entryUsername, targetUsername) => {
+	const source = String(entryUsername || "").trim().toLowerCase();
+	const target = String(targetUsername || "").trim().toLowerCase();
+	if (!source || !target) return false;
+	if (!source.includes("*")) return source === target;
+
+	// Convert masked usernames like B***v to a regex: ^b.*v$
+	const escaped = source.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	const wildcardPattern = `^${escaped.replace(/\*/g, ".*")}$`;
+	try {
+		return new RegExp(wildcardPattern).test(target);
+	} catch {
+		return false;
+	}
+};
+
+const buildResolvedWagerList = async () => {
+	const leaderboard = await fetchRoobetAffiliateStatsFixedMonthly();
+
+	return leaderboard.map((entry) => {
+		const wagered = Number(entry.wagered || 0);
+		const weightedWagered = Number(entry.weightedWagered || 0);
+		return {
+			uid: String(entry?.uid || ""),
+			rawUsername: String(entry?.username || ""),
+			username: String(entry?.username || ""),
+			wagered,
+			weightedWagered,
+			effectiveWager: Math.max(wagered, weightedWagered),
+		};
+	});
+};
+
 exports.createGWS = async (req, res) => {
-	const { title, endTime } = req.body;
+	const { title, endTime, entryRequirement, requiredWagerAmount } = req.body;
+	const requirement =
+		entryRequirement === "no_wager_requirement"
+			? "no_wager_requirement"
+			: "leaderboard_wager";
+	const parsedRequiredWager = Number(requiredWagerAmount);
+	const effectiveRequiredWager =
+		requirement === "leaderboard_wager"
+			? Number.isFinite(parsedRequiredWager) && parsedRequiredWager > 0
+				? parsedRequiredWager
+				: 1
+			: 0;
 
 	try {
-		const gws = new GWS({ title, endTime, state: "active" }); // <-- set active here
+		const gws = new GWS({
+			title,
+			endTime,
+			entryRequirement: requirement,
+			requiredWagerAmount: effectiveRequiredWager,
+			state: "active",
+		});
 		await gws.save();
 		res.status(201).json({ message: "GWS created", gws });
 	} catch (error) {
@@ -15,70 +68,56 @@ exports.createGWS = async (req, res) => {
 };
 
 exports.joinGWS = async (req, res) => {
-	const user = await User.findById(req.user.id);
-	if (!user || !user.rainbetUsername) {
-		return res
-			.status(400)
-			.json({ message: "Rainbet username is required to join GWs." });
-	}
-
-	// ✅ Calculate current biweekly range (starting from 2025-07-20)
-	const now = new Date();
-	const firstStart = new Date("2025-07-20T00:00:00Z");
-	const daysSinceStart = Math.floor((now - firstStart) / (1000 * 60 * 60 * 24));
-	const cycle = Math.floor(daysSinceStart / 14);
-	const startDate = new Date(firstStart);
-	startDate.setDate(startDate.getDate() + cycle * 14);
-	const endDate = new Date(startDate);
-	endDate.setDate(endDate.getDate() + 13);
-
-	const start_at = startDate.toISOString().split("T")[0];
-	const end_at = endDate.toISOString().split("T")[0];
-
-	// ✅ Fetch leaderboard from Rainbet API
-	const url = `https://services.rainbet.com/v1/external/affiliates?start_at=${start_at}&end_at=${end_at}&key=${process.env.RAINBET_API_KEY}`;
-
 	try {
-		const response = await fetch(url);
-		const data = await response.json();
-
-		if (!data?.affiliates || !Array.isArray(data.affiliates)) {
-			throw new Error("Invalid leaderboard response");
-		}
-
-		const isEligible = data.affiliates.some((entry) => {
-			return (
-				entry.username?.toLowerCase() === user.rainbetUsername.toLowerCase() &&
-				parseFloat(entry.wagered_amount || "0") > 0
-			);
-		});
-
-		if (!isEligible) {
-			return res.status(403).json({
-				message:
-					"You must appear in the current biweekly leaderboard (by wagering on Rainbet) to enter this giveaway.",
+		const user = await User.findById(req.user.id);
+		if (!user || !user.rainbetUsername) {
+			return res.status(400).json({
+				message: "Roobet username is required to join giveaways.",
 			});
 		}
-	} catch (error) {
-		console.error("Leaderboard check failed:", error);
-		return res.status(500).json({ message: "Failed to validate eligibility." });
-	}
 
-	// ✅ Normal join logic
-	try {
 		const gws = await GWS.findById(req.params.id);
 		if (!gws) return res.status(404).json({ message: "GWS not found" });
 
-		if (gws.participants.includes(req.user.id)) {
+		if (gws.entryRequirement === "leaderboard_wager") {
+			const minRequiredWager = Number(gws.requiredWagerAmount || 0);
+			try {
+				const wagerList = await buildResolvedWagerList();
+				const userName = String(user.rainbetUsername || "").toLowerCase();
+
+				const isEligible = wagerList.some((entry) => {
+					const entryName = entry.username;
+					const usernameMatches = matchesMaskedUsername(entryName, userName);
+					return usernameMatches && entry.effectiveWager >= minRequiredWager;
+				});
+
+				if (!isEligible) {
+					return res.status(403).json({
+						message: `This giveaway requires at least ${minRequiredWager} wager on the current Roobet leaderboard.`,
+					});
+				}
+			} catch (error) {
+				console.error("Roobet leaderboard check failed:", error.message || error);
+				return res.status(403).json({
+					message: `This giveaway requires at least ${minRequiredWager} wager on the monthly leaderboard.`,
+				});
+			}
+		}
+
+		const updated = await GWS.findOneAndUpdate(
+			{ _id: gws._id, participants: { $ne: req.user.id } },
+			{
+				$addToSet: { participants: req.user.id },
+				$inc: { totalParticipants: 1, totalEntries: 1 },
+			},
+			{ new: true }
+		).populate("participants", "kickUsername");
+
+		if (!updated) {
 			return res.status(400).json({ message: "Already joined" });
 		}
 
-		gws.participants.push(req.user.id);
-		gws.totalParticipants += 1;
-		gws.totalEntries += 1;
-		await gws.save();
-
-		res.json({ message: "Joined GWS", gws });
+		res.json({ message: "Joined GWS", gws: updated });
 	} catch (error) {
 		console.error("GWS join failed:", error);
 		res.status(500).json({ message: "Join failed" });
@@ -115,9 +154,19 @@ exports.drawWinner = async (req, res) => {
 		gws.state = "complete";
 		await gws.save();
 
+		const winnerProfile = await User.findById(winner._id).select(
+			"kickUsername rainbetUsername discordUsername"
+		);
+		const resolvedWinner = winnerProfile || winner;
+
 		res.json({
 			message: "Winner selected",
-			winner: { id: winner._id, kickUsername: winner.kickUsername },
+			winner: {
+				id: resolvedWinner._id,
+				kickUsername: resolvedWinner.kickUsername,
+				rainbetUsername: resolvedWinner.rainbetUsername,
+				discordUsername: resolvedWinner.discordUsername,
+			},
 			gws,
 		});
 	} catch (error) {
@@ -128,12 +177,88 @@ exports.drawWinner = async (req, res) => {
 exports.getAllGWS = async (req, res) => {
 	try {
 		const giveaways = await GWS.find()
-			.populate("winner", "kickUsername") // only include username
-			.populate("participants", "kickUsername");
-		res.json(giveaways);
+			.populate("winner", "kickUsername rainbetUsername discordUsername")
+			.populate("participants", "kickUsername rainbetUsername discordUsername");
+
+		const normalized = giveaways.map((doc) => {
+			const item = doc.toObject();
+			const winnerObj =
+				item.winner && typeof item.winner === "object" ? item.winner : null;
+			const winnerId = winnerObj?._id ? String(winnerObj._id) : null;
+
+			if (!winnerObj || !winnerId) {
+				return item;
+			}
+
+			const hasFullWinnerDetails =
+				Boolean(winnerObj.rainbetUsername) && Boolean(winnerObj.discordUsername);
+			if (hasFullWinnerDetails) {
+				return item;
+			}
+
+			const fallbackFromParticipants = Array.isArray(item.participants)
+				? item.participants.find((p) => String(p?._id) === winnerId)
+				: null;
+
+			if (fallbackFromParticipants) {
+				item.winner = {
+					_id: winnerObj._id,
+					kickUsername:
+						winnerObj.kickUsername || fallbackFromParticipants.kickUsername,
+					rainbetUsername:
+						winnerObj.rainbetUsername || fallbackFromParticipants.rainbetUsername,
+					discordUsername:
+						winnerObj.discordUsername || fallbackFromParticipants.discordUsername,
+				};
+			}
+
+			return item;
+		});
+
+		res.json(normalized);
 	} catch (err) {
 		console.error("❌ getAllGWS error:", err);
 		res.status(500).json({ message: "Failed to fetch giveaways." });
+	}
+};
+
+exports.getWagerDebugList = async (req, res) => {
+	try {
+		const period = getGwsFixedMonthlyPeriod();
+		const wagerList = await buildResolvedWagerList();
+		const sorted = wagerList.sort((a, b) => b.effectiveWager - a.effectiveWager);
+		res.json({
+			periodType: "monthly",
+			startDate: period.startDate,
+			endDate: period.endDate,
+			count: sorted.length,
+			data: sorted,
+		});
+	} catch (error) {
+		console.error("❌ getWagerDebugList error:", error.message || error);
+		res.status(500).json({ message: "Failed to fetch wager debug list." });
+	}
+};
+
+exports.getGwsPlayers = async (req, res) => {
+	try {
+		const gws = await GWS.findById(req.params.id)
+			.select("title participants totalParticipants")
+			.populate("participants", "kickUsername rainbetUsername discordUsername");
+
+		if (!gws) {
+			return res.status(404).json({ message: "GWS not found" });
+		}
+
+		res.json({
+			gwsId: gws._id,
+			title: gws.title,
+			totalParticipants: gws.totalParticipants,
+			players: gws.participants || [],
+		});
+	} catch (error) {
+		console.error("❌ getGwsPlayers error:", error.message || error);
+		res.status(500).json({ message: "Failed to fetch giveaway players." });
 	}
 };
 // Helper to auto-draw winner and update state
