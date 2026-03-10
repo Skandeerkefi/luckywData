@@ -1,8 +1,24 @@
 const isNonEmptyString = (value) =>
 	typeof value === "string" && value.trim().length > 0;
 
+const TEAM_SIZE_3V3 = 3;
+const MIN_3V3_TEAM_COUNT = 2;
+const MAX_3V3_TEAM_COUNT = 12;
+
 const validateCreateTournamentPayload = (payload) => {
-	const { name, slotGameName, prizeAmount, maxPlayers, startDate } = payload;
+	const { name, slotGameName, prizeAmount, maxPlayers, startDate, format, teamCount } = payload;
+	const normalizedMaxPlayers = Number(maxPlayers);
+	const normalizedTeamCount = Number(teamCount);
+	const normalizedFormat =
+		typeof format === "string" && format.trim().length > 0
+			? format
+			: Number.isInteger(normalizedTeamCount) && normalizedTeamCount > 0
+				? "3v3"
+				: Number.isInteger(normalizedMaxPlayers) &&
+					normalizedMaxPlayers % TEAM_SIZE_3V3 === 0 &&
+					normalizedMaxPlayers >= TEAM_SIZE_3V3 * MIN_3V3_TEAM_COUNT
+					? "3v3"
+				: "1v1";
 
 	if (!isNonEmptyString(name)) {
 		return "Tournament name is required.";
@@ -16,8 +32,36 @@ const validateCreateTournamentPayload = (payload) => {
 		return "prizeAmount must be a non-negative number.";
 	}
 
-	if (![8, 16].includes(maxPlayers)) {
-		return "maxPlayers must be 8 or 16.";
+		if (!["1v1", "3v3"].includes(normalizedFormat)) {
+		return "format must be 1v1 or 3v3.";
+	}
+
+	if (!Number.isInteger(normalizedMaxPlayers) || normalizedMaxPlayers <= 0) {
+		return "maxPlayers must be a positive integer.";
+	}
+
+	if (normalizedFormat === "1v1" && ![8, 16].includes(normalizedMaxPlayers)) {
+		return "maxPlayers must be 8 or 16 for 1v1 tournaments.";
+	}
+
+	if (normalizedFormat === "3v3") {
+		const effectiveTeamCount =
+			Number.isInteger(normalizedTeamCount) && normalizedTeamCount > 0
+				? normalizedTeamCount
+				: Math.floor(normalizedMaxPlayers / TEAM_SIZE_3V3);
+
+		if (
+			!Number.isInteger(effectiveTeamCount) ||
+			effectiveTeamCount < MIN_3V3_TEAM_COUNT ||
+			effectiveTeamCount > MAX_3V3_TEAM_COUNT
+		) {
+			return `teamCount must be between ${MIN_3V3_TEAM_COUNT} and ${MAX_3V3_TEAM_COUNT} for 3v3 tournaments.`;
+		}
+
+		const expectedPlayers = effectiveTeamCount * TEAM_SIZE_3V3;
+		if (normalizedMaxPlayers !== expectedPlayers) {
+			return `maxPlayers must equal teamCount * ${TEAM_SIZE_3V3} for 3v3 tournaments.`;
+		}
 	}
 
 	const parsedStartDate = new Date(startDate);

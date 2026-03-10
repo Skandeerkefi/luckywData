@@ -15,10 +15,12 @@ const tournamentPlayerSchema = new mongoose.Schema(
 			index: true,
 		},
 		position: { type: Number, required: true, min: 1 },
+		teamKey: { type: String, default: null, index: true },
 		slotName: { type: String, required: true, trim: true },
 		slotDisplayName: { type: String, required: true, trim: true },
 		provider: { type: String, required: true, trim: true },
 		slotImage: { type: String, required: true, trim: true },
+		multiplier: { type: Number, default: null, min: 0 },
 		isEliminated: { type: Boolean, default: false },
 		eliminatedInRound: { type: Number, default: null },
 	},
@@ -27,6 +29,7 @@ const tournamentPlayerSchema = new mongoose.Schema(
 
 tournamentPlayerSchema.index({ tournament: 1, userId: 1 }, { unique: true });
 tournamentPlayerSchema.index({ tournament: 1, position: 1 }, { unique: true });
+tournamentPlayerSchema.index({ tournament: 1, slotName: 1, provider: 1 }, { unique: true });
 
 const TournamentPlayer =
 	mongoose.models.TournamentPlayer ||

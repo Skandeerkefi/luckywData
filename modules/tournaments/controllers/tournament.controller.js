@@ -61,6 +61,20 @@ const startTournament = async (req, res) => {
 	}
 };
 
+const submitTeamResults = async (req, res) => {
+	try {
+		const result = await tournamentService.submitTeamResults({
+			tournamentId: req.params.id,
+			payload: req.body,
+		});
+		res.status(200).json({ message: "Team results submitted.", ...result });
+	} catch (error) {
+		res
+			.status(error.statusCode || 500)
+			.json({ message: error.message || "Failed to submit team results." });
+	}
+};
+
 const deleteTournament = async (req, res) => {
 	try {
 		await tournamentService.deleteTournament(req.params.id);
@@ -87,6 +101,7 @@ module.exports = {
 	getTournamentById,
 	joinTournament,
 	startTournament,
+	submitTeamResults,
 	deleteTournament,
 	listTournamentHistory,
 };

@@ -5,6 +5,7 @@ const {
 	getTournamentById,
 	joinTournament,
 	startTournament,
+	submitTeamResults,
 	deleteTournament,
 	listTournamentHistory,
 } = require("../controllers/tournament.controller");
@@ -18,6 +19,7 @@ router.get("/:id", getTournamentById);
 
 router.post("/", verifyToken, isAdmin, createTournament);
 router.patch("/:id/start", verifyToken, isAdmin, startTournament);
+router.post("/:id/team-results", verifyToken, isAdmin, submitTeamResults);
 router.delete("/:id", verifyToken, isAdmin, deleteTournament);
 
 router.post("/:id/join", verifyToken, joinTournament);
