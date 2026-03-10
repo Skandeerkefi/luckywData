@@ -19,6 +19,16 @@ function getEndOfDay(dateStr) {
   return new Date(dateStr + "T23:59:59.999Z").toISOString();
 }
 
+function normalizeStartDate(value) {
+  if (!value) return undefined;
+  return value.includes("T") ? new Date(value).toISOString() : getStartOfDay(value);
+}
+
+function normalizeEndDate(value) {
+  if (!value) return undefined;
+  return value.includes("T") ? new Date(value).toISOString() : getEndOfDay(value);
+}
+
 // Filter out dice from house games
 function filterDice(player) {
   if (!player.favoriteGameId) return true;
@@ -34,10 +44,14 @@ const leaderboardController = {
       const params = {
         userId: process.env.USER_ID,
         categories: "slots,provably fair",
+        gameIdentifiers: "-housegames:dice",
+        sortBy: "wagered",
       };
 
-      if (startDate) params.startDate = getStartOfDay(startDate);
-      if (endDate) params.endDate = getEndOfDay(endDate);
+      const normalizedStart = normalizeStartDate(startDate);
+      const normalizedEnd = normalizeEndDate(endDate);
+      if (normalizedStart) params.startDate = normalizedStart;
+      if (normalizedEnd) params.endDate = normalizedEnd;
 
       const response = await axios.get(
         `${process.env.API_BASE_URL}/affiliate/v2/stats`,
@@ -67,7 +81,7 @@ const leaderboardController = {
 
       res.json({
         disclosure:
-          "Only Slots and Provably Fair (house) games are included. Dice games are excluded.",
+          "Your wagers on Roobet will count towards the leaderboard at weighted rules to prevent abuse: RTP <= 97% contributes 100%, RTP > 97% contributes 50%, RTP >= 98% contributes 10%. Only Slots and Provably Fair (house) games count, and Dice is excluded.",
         data: processedData,
       });
     } catch (error) {
@@ -87,10 +101,14 @@ const leaderboardController = {
       const params = {
         userId: process.env.USER_ID,
         categories: "slots,provably fair",
+        gameIdentifiers: "-housegames:dice",
+        sortBy: "wagered",
       };
 
-      if (startDate) params.startDate = getStartOfDay(startDate);
-      if (endDate) params.endDate = getEndOfDay(endDate);
+      const normalizedStart = normalizeStartDate(startDate);
+      const normalizedEnd = normalizeEndDate(endDate);
+      if (normalizedStart) params.startDate = normalizedStart;
+      if (normalizedEnd) params.endDate = normalizedEnd;
 
       const response = await axios.get(
         `${process.env.API_BASE_URL}/affiliate/v2/stats`,
@@ -120,7 +138,7 @@ const leaderboardController = {
 
       res.json({
         disclosure:
-          "Only Slots and Provably Fair (house) games are included. Dice games are excluded.",
+          "Your wagers on Roobet will count towards the leaderboard at weighted rules to prevent abuse: RTP <= 97% contributes 100%, RTP > 97% contributes 50%, RTP >= 98% contributes 10%. Only Slots and Provably Fair (house) games count, and Dice is excluded.",
         data: processedData,
       });
     } catch (error) {
