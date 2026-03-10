@@ -1,5 +1,14 @@
 const axios = require("axios");
 
+// Helper function to blur usernames
+function blurUsername(username) {
+  if (!username || username.length <= 2) return "***";
+  const firstChar = username.charAt(0);
+  const lastChar = username.charAt(username.length - 1);
+  const blurredPart = "*".repeat(Math.max(0, username.length - 2));
+  return firstChar + blurredPart + lastChar;
+}
+
 // Helper function to get start of day in ISO format
 function getStartOfDay(dateStr) {
   return new Date(dateStr + "T00:00:00.000Z").toISOString();
@@ -10,75 +19,55 @@ function getEndOfDay(dateStr) {
   return new Date(dateStr + "T23:59:59.999Z").toISOString();
 }
 
-function normalizeStartDate(value) {
-  if (!value) return undefined;
-  return value.includes("T") ? new Date(value).toISOString() : getStartOfDay(value);
-}
-
-function normalizeEndDate(value) {
-  if (!value) return undefined;
-  return value.includes("T") ? new Date(value).toISOString() : getEndOfDay(value);
-}
-
-function buildRoobetStatsParams({ startDate, endDate }) {
-  const params = {
-    userId: process.env.USER_ID,
-    categories: "slots,provably fair",
-    gameIdentifiers: "-housegames:dice",
-    sortBy: "wagered",
-  };
-
-  const normalizedStart = normalizeStartDate(startDate);
-  const normalizedEnd = normalizeEndDate(endDate);
-  if (normalizedStart) params.startDate = normalizedStart;
-  if (normalizedEnd) params.endDate = normalizedEnd;
-
-  return params;
-}
-
-async function fetchRoobetStats(params) {
-  const response = await axios.get(`${process.env.API_BASE_URL}/affiliate/v2/stats`, {
-    params,
-    headers: {
-      Authorization: `Bearer ${process.env.ROOBET_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-  });
-
-  return response.data;
-}
-
-function mapAndSortLeaderboardData(rows) {
-  const processedData = rows
-    .map((player) => ({
-      uid: player.uid,
-      username: player.username,
-      wagered: player.wagered,
-      weightedWagered: player.weightedWagered,
-      favoriteGameId: player.favoriteGameId,
-      favoriteGameTitle: player.favoriteGameTitle,
-      rankLevel: player.rankLevel,
-      rankLevelImage: player.rankLevelImage,
-      highestMultiplier: player.highestMultiplier,
-    }));
-
-  processedData.sort((a, b) => b.weightedWagered - a.weightedWagered);
-  return processedData;
+// Filter out dice from house games
+function filterDice(player) {
+  if (!player.favoriteGameId) return true; // include if no game info
+  return !player.favoriteGameId.includes("housegames:dice");
 }
 
 const leaderboardController = {
-  // Get full leaderboard with optional query params
   getLeaderboard: async (req, res) => {
     try {
       const { startDate, endDate } = req.query;
 
-      const params = buildRoobetStatsParams({ startDate, endDate });
-      const rows = await fetchRoobetStats(params);
-      const processedData = mapAndSortLeaderboardData(rows);
+      const params = {
+        userId: process.env.USER_ID,
+        categories: "slots,provably fair", // Only Slots & Provably Fair
+      };
+
+      if (startDate) params.startDate = getStartOfDay(startDate);
+      if (endDate) params.endDate = getEndOfDay(endDate);
+
+      const response = await axios.get(
+        `${process.env.API_BASE_URL}/affiliate/v2/stats`,
+        {
+          params,
+          headers: {
+            Authorization: `Bearer ${process.env.ROOBET_API_KEY}`,
+          },
+        }
+      );
+
+      const processedData = response.data
+        .filter(filterDice) // remove dice games
+        .map((player) => ({
+          uid: player.uid,
+          username: blurUsername(player.username),
+          wagered: player.wagered,
+          weightedWagered: player.weightedWagered,
+          favoriteGameId: player.favoriteGameId,
+          favoriteGameTitle: player.favoriteGameTitle,
+          rankLevel: player.rankLevel,
+          rankLevelImage: player.rankLevelImage,
+          highestMultiplier: player.highestMultiplier,
+        }));
+
+      // Sort by weightedWagered descending
+      processedData.sort((a, b) => b.weightedWagered - a.weightedWagered);
 
       res.json({
         disclosure:
-          "Your wagers on Roobet count toward the leaderboard with weighted rules to prevent abuse: RTP <= 97% contributes 100%, RTP > 97% contributes 50%, RTP >= 98% contributes 10%. Only Slots and Provably Fair (house games) count, and Dice is excluded.",
+          "Only Slots and Provably Fair (house) games are included. Dice games are excluded.",
         data: processedData,
       });
     } catch (error) {
@@ -90,18 +79,47 @@ const leaderboardController = {
     }
   },
 
-  // Get leaderboard by date range (via route params)
   getLeaderboardByDate: async (req, res) => {
     try {
       const { startDate, endDate } = req.params;
 
-      const params = buildRoobetStatsParams({ startDate, endDate });
-      const rows = await fetchRoobetStats(params);
-      const processedData = mapAndSortLeaderboardData(rows);
+      const params = {
+        userId: process.env.USER_ID,
+        categories: "slots,provably fair",
+      };
+
+      if (startDate) params.startDate = getStartOfDay(startDate);
+      if (endDate) params.endDate = getEndOfDay(endDate);
+
+      const response = await axios.get(
+        `${process.env.API_BASE_URL}/affiliate/v2/stats`,
+        {
+          params,
+          headers: {
+            Authorization: `Bearer ${process.env.ROOBET_API_KEY}`,
+          },
+        }
+      );
+
+      const processedData = response.data
+        .filter(filterDice)
+        .map((player) => ({
+          uid: player.uid,
+          username: blurUsername(player.username),
+          wagered: player.wagered,
+          weightedWagered: player.weightedWagered,
+          favoriteGameId: player.favoriteGameId,
+          favoriteGameTitle: player.favoriteGameTitle,
+          rankLevel: player.rankLevel,
+          rankLevelImage: player.rankLevelImage,
+          highestMultiplier: player.highestMultiplier,
+        }));
+
+      processedData.sort((a, b) => b.weightedWagered - a.weightedWagered);
 
       res.json({
         disclosure:
-          "Your wagers on Roobet count toward the leaderboard with weighted rules to prevent abuse: RTP <= 97% contributes 100%, RTP > 97% contributes 50%, RTP >= 98% contributes 10%. Only Slots and Provably Fair (house games) count, and Dice is excluded.",
+          "Only Slots and Provably Fair (house) games are included. Dice games are excluded.",
         data: processedData,
       });
     } catch (error) {
