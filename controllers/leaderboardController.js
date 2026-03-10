@@ -35,49 +35,62 @@ function filterDice(player) {
   return !player.favoriteGameId.includes("housegames:dice");
 }
 
+function buildRoobetStatsParams({ startDate, endDate }) {
+  const params = {
+    userId: process.env.USER_ID,
+    categories: "slots,provably fair",
+    gameIdentifiers: "-housegames:dice",
+    sortBy: "wagered",
+  };
+
+  const normalizedStart = normalizeStartDate(startDate);
+  const normalizedEnd = normalizeEndDate(endDate);
+  if (normalizedStart) params.startDate = normalizedStart;
+  if (normalizedEnd) params.endDate = normalizedEnd;
+
+  return params;
+}
+
+async function fetchRoobetStats(params) {
+  const response = await axios.get(`${process.env.API_BASE_URL}/affiliate/v2/stats`, {
+    params,
+    headers: {
+      Authorization: `Bearer ${process.env.ROOBET_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  return response.data;
+}
+
+function mapAndSortLeaderboardData(rows) {
+  const processedData = rows
+    .filter(filterDice)
+    .map((player) => ({
+      uid: player.uid,
+      username: blurUsername(player.username),
+      wagered: player.wagered,
+      weightedWagered: player.weightedWagered,
+      favoriteGameId: player.favoriteGameId,
+      favoriteGameTitle: player.favoriteGameTitle,
+      rankLevel: player.rankLevel,
+      rankLevelImage: player.rankLevelImage,
+      highestMultiplier: player.highestMultiplier,
+    }));
+
+  processedData.sort((a, b) => b.weightedWagered - a.weightedWagered);
+  return processedData;
+}
+
 const leaderboardController = {
   // Get full leaderboard with optional query params
   getLeaderboard: async (req, res) => {
     try {
       const { startDate, endDate } = req.query;
 
-      const params = {
-        userId: process.env.USER_ID,
-        categories: "slots,provably fair",
-        gameIdentifiers: "-housegames:dice",
-        sortBy: "wagered",
-      };
-
-      const normalizedStart = normalizeStartDate(startDate);
-      const normalizedEnd = normalizeEndDate(endDate);
-      if (normalizedStart) params.startDate = normalizedStart;
-      if (normalizedEnd) params.endDate = normalizedEnd;
-
-      const response = await axios.get(
-        `${process.env.API_BASE_URL}/affiliate/v2/stats`,
-        {
-          params,
-          headers: {
-            Authorization: `Bearer ${process.env.ROOBET_API_KEY}`,
-          },
-        }
-      );
-
-      const processedData = response.data
-        .filter(filterDice)
-        .map((player) => ({
-          uid: player.uid,
-          username: blurUsername(player.username),
-          wagered: player.wagered,
-          weightedWagered: player.weightedWagered,
-          favoriteGameId: player.favoriteGameId,
-          favoriteGameTitle: player.favoriteGameTitle,
-          rankLevel: player.rankLevel,
-          rankLevelImage: player.rankLevelImage,
-          highestMultiplier: player.highestMultiplier,
-        }));
-
-      processedData.sort((a, b) => b.weightedWagered - a.weightedWagered);
+      const params = buildRoobetStatsParams({ startDate, endDate });
+      const rows = await fetchRoobetStats(params);
+      const processedData = mapAndSortLeaderboardData(rows);
 
       res.json({
         disclosure:
@@ -98,43 +111,9 @@ const leaderboardController = {
     try {
       const { startDate, endDate } = req.params;
 
-      const params = {
-        userId: process.env.USER_ID,
-        categories: "slots,provably fair",
-        gameIdentifiers: "-housegames:dice",
-        sortBy: "wagered",
-      };
-
-      const normalizedStart = normalizeStartDate(startDate);
-      const normalizedEnd = normalizeEndDate(endDate);
-      if (normalizedStart) params.startDate = normalizedStart;
-      if (normalizedEnd) params.endDate = normalizedEnd;
-
-      const response = await axios.get(
-        `${process.env.API_BASE_URL}/affiliate/v2/stats`,
-        {
-          params,
-          headers: {
-            Authorization: `Bearer ${process.env.ROOBET_API_KEY}`,
-          },
-        }
-      );
-
-      const processedData = response.data
-        .filter(filterDice)
-        .map((player) => ({
-          uid: player.uid,
-          username: blurUsername(player.username),
-          wagered: player.wagered,
-          weightedWagered: player.weightedWagered,
-          favoriteGameId: player.favoriteGameId,
-          favoriteGameTitle: player.favoriteGameTitle,
-          rankLevel: player.rankLevel,
-          rankLevelImage: player.rankLevelImage,
-          highestMultiplier: player.highestMultiplier,
-        }));
-
-      processedData.sort((a, b) => b.weightedWagered - a.weightedWagered);
+      const params = buildRoobetStatsParams({ startDate, endDate });
+      const rows = await fetchRoobetStats(params);
+      const processedData = mapAndSortLeaderboardData(rows);
 
       res.json({
         disclosure:
