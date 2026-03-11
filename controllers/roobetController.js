@@ -1,13 +1,31 @@
 const axios = require("axios");
 
 const DEFAULT_ROOBET_BASE_URL = "https://roobetconnect.com";
-const GWS_FIXED_MONTHLY_START = "2026-03-10T00:00:00.000Z";
-const GWS_FIXED_MONTHLY_END = "2026-04-10T23:59:59.999Z";
 
-const getGwsFixedMonthlyPeriod = () => ({
-	startDate: GWS_FIXED_MONTHLY_START,
-	endDate: GWS_FIXED_MONTHLY_END,
-});
+// Dynamically calculates the current leaderboard period (10th-to-10th, UTC noon)
+const getCurrentLeaderboardPeriod = () => {
+	const now = new Date();
+	const year = now.getUTCFullYear();
+	const month = now.getUTCMonth();
+	const day = now.getUTCDate();
+
+	let startYear = year;
+	let startMonth = month;
+	if (day < 10) {
+		startMonth = month - 1;
+		if (startMonth < 0) { startMonth = 11; startYear = year - 1; }
+	}
+
+	const start = new Date(Date.UTC(startYear, startMonth, 10, 12, 0, 0, 0));
+	const end = new Date(Date.UTC(startYear, startMonth + 1, 10, 12, 0, 0, 0));
+
+	return {
+		startDate: start.toISOString(),
+		endDate: end.toISOString(),
+	};
+};
+
+const getGwsFixedMonthlyPeriod = getCurrentLeaderboardPeriod;
 
 exports.getGwsFixedMonthlyPeriod = getGwsFixedMonthlyPeriod;
 
@@ -57,9 +75,12 @@ const fetchRoobetAffiliateStats = async ({
 exports.fetchRoobetAffiliateStats = fetchRoobetAffiliateStats;
 
 const fetchRoobetAffiliateStatsFixedMonthly = async () => {
+	const { startDate, endDate } = getCurrentLeaderboardPeriod();
 	return fetchRoobetAffiliateStats({
-		startDate: GWS_FIXED_MONTHLY_START,
-		endDate: GWS_FIXED_MONTHLY_END,
+		startDate,
+		endDate,
+		categories: "slots,provably fair",
+		gameIdentifiers: "-housegames:dice",
 		sortBy: "wagered",
 	});
 };

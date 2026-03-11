@@ -33,7 +33,7 @@ const buildResolvedWagerList = async () => {
 			username: String(entry?.username || ""),
 			wagered,
 			weightedWagered,
-			effectiveWager: Math.max(wagered, weightedWagered),
+			effectiveWager: weightedWagered,
 		};
 	});
 };
