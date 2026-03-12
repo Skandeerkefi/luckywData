@@ -14,9 +14,40 @@ const BASE_PARAMS = {
   gameIdentifiers: "-housegames:dice",
 };
 
-// Helper function to normalize date to noon UTC (T12:00:00.000Z)
+// Helper for current leaderboard normalization at midnight UTC.
 function getNoonUTC(dateStr) {
   return new Date(dateStr + "T00:00:00.000Z").toISOString();
+}
+
+// Helper for previous leaderboard normalization at noon UTC.
+function getNoonUTCPrevious(dateStr) {
+  return new Date(dateStr + "T12:00:00.000Z").toISOString();
+}
+
+async function fetchLeaderboardData(params) {
+  const response = await axios.get(`${process.env.API_BASE_URL}/affiliate/v2/stats`, {
+    params,
+    headers: {
+      Authorization: `Bearer ${process.env.ROOBET_API_KEY}`,
+    },
+  });
+
+  return response.data
+    .map((player) => ({
+      uid: player.uid,
+      username: player.username,
+      wagered: Number(player.wagered || 0),
+      weightedWagered: Number(player.weightedWagered || 0),
+      favoriteGameId: player.favoriteGameId,
+      favoriteGameTitle: player.favoriteGameTitle,
+      rankLevelImage: player.rankLevelImage,
+      highestMultiplier: player.highestMultiplier,
+    }))
+    .sort((a, b) => b.weightedWagered - a.weightedWagered)
+    .map((player, index) => ({
+      ...player,
+      rankLevel: index + 1,
+    }));
 }
 
 const leaderboardController = {
@@ -30,32 +61,7 @@ const leaderboardController = {
       if (startDate) params.startDate = getNoonUTC(startDate);
       if (endDate) params.endDate = getNoonUTC(endDate);
 
-      const response = await axios.get(
-        `${process.env.API_BASE_URL}/affiliate/v2/stats`,
-        {
-          params,
-          headers: {
-            Authorization: `Bearer ${process.env.ROOBET_API_KEY}`,
-          },
-        }
-      );
-
-      const processedData = response.data
-        .map((player) => ({
-          uid: player.uid,
-          username: player.username,
-          wagered: Number(player.wagered || 0),
-          weightedWagered: Number(player.weightedWagered || 0),
-          favoriteGameId: player.favoriteGameId,
-          favoriteGameTitle: player.favoriteGameTitle,
-          rankLevelImage: player.rankLevelImage,
-          highestMultiplier: player.highestMultiplier,
-        }))
-        .sort((a, b) => b.weightedWagered - a.weightedWagered)
-        .map((player, index) => ({
-          ...player,
-          rankLevel: index + 1,
-        }));
+      const processedData = await fetchLeaderboardData(params);
 
       res.json({
         disclosure: LEADERBOARD_DISCLOSURE,
@@ -80,32 +86,32 @@ const leaderboardController = {
       if (startDate) params.startDate = getNoonUTC(startDate);
       if (endDate) params.endDate = getNoonUTC(endDate);
 
-      const response = await axios.get(
-        `${process.env.API_BASE_URL}/affiliate/v2/stats`,
-        {
-          params,
-          headers: {
-            Authorization: `Bearer ${process.env.ROOBET_API_KEY}`,
-          },
-        }
-      );
+      const processedData = await fetchLeaderboardData(params);
 
-      const processedData = response.data
-        .map((player) => ({
-          uid: player.uid,
-          username: player.username,
-          wagered: Number(player.wagered || 0),
-          weightedWagered: Number(player.weightedWagered || 0),
-          favoriteGameId: player.favoriteGameId,
-          favoriteGameTitle: player.favoriteGameTitle,
-          rankLevelImage: player.rankLevelImage,
-          highestMultiplier: player.highestMultiplier,
-        }))
-        .sort((a, b) => b.weightedWagered - a.weightedWagered)
-        .map((player, index) => ({
-          ...player,
-          rankLevel: index + 1,
-        }));
+      res.json({
+        disclosure: LEADERBOARD_DISCLOSURE,
+        data: processedData,
+      });
+    } catch (error) {
+      console.error("Error fetching leaderboard data:", error.message);
+      res.status(500).json({
+        error: "Failed to fetch leaderboard data",
+        details: error.response?.data || error.message,
+      });
+    }
+  },
+
+  // Get previous leaderboard with optional query params (uses noon UTC normalization)
+  getPreviousLeaderboard: async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+
+      const params = { ...BASE_PARAMS };
+
+      if (startDate) params.startDate = getNoonUTCPrevious(startDate);
+      if (endDate) params.endDate = getNoonUTCPrevious(endDate);
+
+      const processedData = await fetchLeaderboardData(params);
 
       res.json({
         disclosure: LEADERBOARD_DISCLOSURE,
