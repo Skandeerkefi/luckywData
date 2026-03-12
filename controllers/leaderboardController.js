@@ -16,7 +16,7 @@ const BASE_PARAMS = {
 
 // Helper function to normalize date to noon UTC (T12:00:00.000Z)
 function getNoonUTC(dateStr) {
-  return new Date(dateStr + "T00:00:00.000Z").toISOString();
+  return new Date(dateStr + "T10:00:00.000Z").toISOString();
 }
 
 const leaderboardController = {
