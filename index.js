@@ -4,10 +4,22 @@ const dotenv = require("dotenv");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const mongoose = require("mongoose");
+const fs = require("fs");
 const path = require("path");
 const { User } = require("./models/User");
 const { SlotCall } = require("./models/SlotCall");
-dotenv.config({ path: path.resolve(__dirname, "../.env") });
+const { LeaderboardConfig } = require("./models/LeaderboardConfig");
+
+const envPaths = [
+	path.resolve(__dirname, ".env"),
+	path.resolve(__dirname, "../.env"),
+];
+
+for (const envPath of envPaths) {
+	if (fs.existsSync(envPath)) {
+		dotenv.config({ path: envPath });
+	}
+}
 
 const fetch = (...args) =>
 	import("node-fetch").then(({ default: fetch }) => fetch(...args));
@@ -61,6 +73,7 @@ app.use(express.json());
 
 // Keep model import active so the schema is registered on boot.
 void SlotCall;
+void LeaderboardConfig;
 
 const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
 
