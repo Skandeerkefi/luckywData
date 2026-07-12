@@ -13,6 +13,8 @@ const DEFAULT_PRIZE_SPLIT = [
 	{ rank: 8, amount: 100 },
 	{ rank: 9, amount: 75 },
 	{ rank: 10, amount: 50 },
+	{ rank: 11, amount: 50 },
+	{ rank: 12, amount: 50 },
 ];
 
 const toDateOnlyUtc = (date) => date.toISOString().split("T")[0];
