@@ -80,7 +80,6 @@ const fetchRoobetAffiliateStatsFixedMonthly = async () => {
 		startDate,
 		endDate,
 		categories: "slots,provably fair",
-		gameIdentifiers: "-housegames:dice",
 		sortBy: "wagered",
 	});
 };

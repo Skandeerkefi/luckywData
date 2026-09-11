@@ -2,16 +2,15 @@ const axios = require("axios");
 
 const LEADERBOARD_DISCLOSURE =
   "Your wagers on Roobet will count towards the leaderboard at the following weights based on the games you are playing. This helps prevent leaderboard abuse:\n" +
-  "- Games with an RTP of 97% or less will contribute 100% of the amount wagered to the leaderboard.\n" +
-  "- Games with an RTP above 97% will contribute 50% of the amount wagered to the leaderboard.\n" +
-  "- Games with an RTP of 98% and above will contribute 10% of the amount wagered to the leaderboard.\n" +
-  "- Only Slots and Housegames count (Dice excluded).\n" +
+  "- Games with an RTP of 97% or lower will contribute 100% of the amount wagered to the leaderboard.\n" +
+  "- Games with an RTP between 97.01% and 98.99% will contribute 50% of the amount wagered to the leaderboard.\n" +
+  "- Games with an RTP of 99% and above will contribute 10% of the amount wagered to the leaderboard.\n" +
+  "- All games including Dice now count towards the leaderboard.\n" +
   "- Only the categories of slots and provably fair are included.";
 
 const BASE_PARAMS = {
   userId: process.env.USER_ID,
   categories: "slots,provably fair",
-  gameIdentifiers: "-housegames:dice",
 };
 
 // Helper for current leaderboard normalization at midnight UTC.
