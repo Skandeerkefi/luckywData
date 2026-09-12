@@ -9,12 +9,10 @@ const LEADERBOARD_DISCLOSURE =
 const BASE_PARAMS = {
   userId: process.env.USER_ID,
   categories: "slots,provably fair",
+  // Exclude housegames:dice from every player's wagered totals via the API.
+  // The '-' prefix tells Roobot to omit those wagers without removing the player.
+  gameIdentifiers: "-housegames:dice",
 };
-
-// Player favoriteGameId identifier for Dice — filtered out at the backend
-// because the Roobot affiliate API aggregates all provably fair games together
-// and cannot exclude individual game types via query params.
-const DICE_GAME_ID_PATTERN = /^housegames:dice$/i;
 
 // Helper for current leaderboard normalization at midnight UTC.
 function getNoonUTC(dateStr) {
@@ -35,7 +33,6 @@ async function fetchLeaderboardData(params) {
   });
 
   return response.data
-    .filter((player) => !DICE_GAME_ID_PATTERN.test(player.favoriteGameId))
     .map((player) => ({
       uid: player.uid,
       username: player.username,
