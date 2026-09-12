@@ -1,8 +1,8 @@
-const GWS = require("../models/GWS");
+﻿const GWS = require("../models/GWS");
 const { User } = require("../models/User");
 const {
 	fetchRoobetAffiliateStatsFixedMonthly,
-	getGwsFixedMonthlyPeriod,
+	getGwsFixedBiWeeklyPeriod,
 } = require("./roobetController");
 
 const matchesMaskedUsername = (entryUsername, targetUsername) => {
@@ -26,14 +26,12 @@ const buildResolvedWagerList = async () => {
 
 	return leaderboard.map((entry) => {
 		const wagered = Number(entry.wagered || 0);
-		const weightedWagered = Number(entry.weightedWagered || 0);
 		return {
 			uid: String(entry?.uid || ""),
 			rawUsername: String(entry?.username || ""),
 			username: String(entry?.username || ""),
 			wagered,
-			weightedWagered,
-			effectiveWager: weightedWagered,
+			effectiveWager: wagered,
 		};
 	});
 };
@@ -99,7 +97,7 @@ exports.joinGWS = async (req, res) => {
 			} catch (error) {
 				console.error("Roobet leaderboard check failed:", error.message || error);
 				return res.status(403).json({
-					message: `This giveaway requires at least ${minRequiredWager} wager on the monthly leaderboard.`,
+					message: `This giveaway requires at least ${minRequiredWager} wager on the bi-weekly leaderboard.`,
 				});
 			}
 		}
@@ -217,25 +215,25 @@ exports.getAllGWS = async (req, res) => {
 
 		res.json(normalized);
 	} catch (err) {
-		console.error("❌ getAllGWS error:", err);
+		console.error("âŒ getAllGWS error:", err);
 		res.status(500).json({ message: "Failed to fetch giveaways." });
 	}
 };
 
 exports.getWagerDebugList = async (req, res) => {
 	try {
-		const period = getGwsFixedMonthlyPeriod();
+		const period = getGwsFixedBiWeeklyPeriod();
 		const wagerList = await buildResolvedWagerList();
 		const sorted = wagerList.sort((a, b) => b.effectiveWager - a.effectiveWager);
 		res.json({
-			periodType: "monthly",
+			periodType: "bi-weekly",
 			startDate: period.startDate,
 			endDate: period.endDate,
 			count: sorted.length,
 			data: sorted,
 		});
 	} catch (error) {
-		console.error("❌ getWagerDebugList error:", error.message || error);
+		console.error("âŒ getWagerDebugList error:", error.message || error);
 		res.status(500).json({ message: "Failed to fetch wager debug list." });
 	}
 };
@@ -257,7 +255,7 @@ exports.getGwsPlayers = async (req, res) => {
 			players: gws.participants || [],
 		});
 	} catch (error) {
-		console.error("❌ getGwsPlayers error:", error.message || error);
+		console.error("âŒ getGwsPlayers error:", error.message || error);
 		res.status(500).json({ message: "Failed to fetch giveaway players." });
 	}
 };

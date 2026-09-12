@@ -2,22 +2,17 @@ const axios = require("axios");
 
 const DEFAULT_ROOBET_BASE_URL = "https://roobetconnect.com";
 
-// Dynamically calculates the current leaderboard period (10th-to-10th, UTC noon)
+// Bi-weekly (15-day) Roobet leaderboard — auto-rotates every 15 days from 09/08/2026
 const getCurrentLeaderboardPeriod = () => {
 	const now = new Date();
-	const year = now.getUTCFullYear();
-	const month = now.getUTCMonth();
-	const day = now.getUTCDate();
+	const nowMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+	const cycleStart = new Date(Date.UTC(2026, 8, 8)); // 09/08/2026
+	const cycleLength = 15 * 86400000;
 
-	let startYear = year;
-	let startMonth = month;
-	if (day < 10) {
-		startMonth = month - 1;
-		if (startMonth < 0) { startMonth = 11; startYear = year - 1; }
-	}
-
-	const start = new Date(Date.UTC(startYear, startMonth, 10, 12, 0, 0, 0));
-	const end = new Date(Date.UTC(startYear, startMonth + 1, 10, 12, 0, 0, 0));
+	const diff = nowMs - cycleStart.getTime();
+	const cycleNum = Math.floor(diff / cycleLength);
+	const start = new Date(cycleStart.getTime() + cycleNum * cycleLength);
+	const end = new Date(start.getTime() + (15 - 1) * 86400000);
 
 	return {
 		startDate: start.toISOString(),
@@ -25,9 +20,9 @@ const getCurrentLeaderboardPeriod = () => {
 	};
 };
 
-const getGwsFixedMonthlyPeriod = getCurrentLeaderboardPeriod;
+const getGwsFixedBiWeeklyPeriod = getCurrentLeaderboardPeriod;
 
-exports.getGwsFixedMonthlyPeriod = getGwsFixedMonthlyPeriod;
+exports.getGwsFixedBiWeeklyPeriod = getGwsFixedBiWeeklyPeriod;
 
 const getRoobetBaseUrl = () => {
 	const configured = String(process.env.API_BASE_URL || "").trim();

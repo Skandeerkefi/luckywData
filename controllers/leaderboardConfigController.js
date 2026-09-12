@@ -2,35 +2,37 @@ const { LeaderboardConfig } = require("../models/LeaderboardConfig");
 
 const CONFIG_KEY = "roobet";
 
+// Bi-weekly (15-day) Roobet leaderboard prize split — $3,000 total across top 15
 const DEFAULT_PRIZE_SPLIT = [
-	{ rank: 1, amount: 800 },
-	{ rank: 2, amount: 550 },
-	{ rank: 3, amount: 325 },
-	{ rank: 4, amount: 200 },
-	{ rank: 5, amount: 150 },
-	{ rank: 6, amount: 125 },
-	{ rank: 7, amount: 125 },
-	{ rank: 8, amount: 100 },
-	{ rank: 9, amount: 75 },
-	{ rank: 10, amount: 50 },
-	{ rank: 11, amount: 50 },
-	{ rank: 12, amount: 50 },
+	{ rank: 1, amount: 600 },
+	{ rank: 2, amount: 450 },
+	{ rank: 3, amount: 350 },
+	{ rank: 4, amount: 275 },
+	{ rank: 5, amount: 225 },
+	{ rank: 6, amount: 200 },
+	{ rank: 7, amount: 175 },
+	{ rank: 8, amount: 150 },
+	{ rank: 9, amount: 125 },
+	{ rank: 10, amount: 100 },
+	{ rank: 11, amount: 90 },
+	{ rank: 12, amount: 80 },
+	{ rank: 13, amount: 70 },
+	{ rank: 14, amount: 65 },
+	{ rank: 15, amount: 45 },
 ];
+
+const CYCLE_START_DATE = new Date(Date.UTC(2026, 8, 8)); // 09/08/2026
+const CYCLE_LENGTH_DAYS = 15;
 
 const toDateOnlyUtc = (date) => date.toISOString().split("T")[0];
 
 const buildDefaultCurrentWindow = () => {
 	const now = new Date();
-	const year = now.getUTCFullYear();
-	const month = now.getUTCMonth();
-	const day = now.getUTCDate();
-
-	const start =
-		day >= 11
-			? new Date(Date.UTC(year, month, 11, 0, 0, 0, 0))
-			: new Date(Date.UTC(year, month - 1, 11, 0, 0, 0, 0));
-	const end = new Date(start);
-	end.setUTCMonth(end.getUTCMonth() + 1);
+	const nowMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+	const diff = nowMs - CYCLE_START_DATE.getTime();
+	const cycleNum = Math.floor(diff / (CYCLE_LENGTH_DAYS * 86400000));
+	const start = new Date(CYCLE_START_DATE.getTime() + cycleNum * CYCLE_LENGTH_DAYS * 86400000);
+	const end = new Date(start.getTime() + (CYCLE_LENGTH_DAYS - 1) * 86400000);
 
 	return {
 		startDate: toDateOnlyUtc(start),
@@ -45,7 +47,7 @@ const buildDefaultPreviousWindow = () => {
 	const previousEnd = new Date(currentStart);
 	previousEnd.setUTCDate(previousEnd.getUTCDate() - 1);
 	const previousStart = new Date(previousEnd);
-	previousStart.setUTCMonth(previousStart.getUTCMonth() - 1);
+	previousStart.setUTCDate(previousStart.getUTCDate() - CYCLE_LENGTH_DAYS + 1);
 
 	return {
 		startDate: toDateOnlyUtc(previousStart),

@@ -42,7 +42,7 @@ async function fetchLeaderboardData(params) {
       rankLevelImage: player.rankLevelImage,
       highestMultiplier: player.highestMultiplier,
     }))
-    .sort((a, b) => b.weightedWagered - a.weightedWagered)
+    .sort((a, b) => b.wagered - a.wagered)
     .map((player, index) => ({
       ...player,
       rankLevel: index + 1,
