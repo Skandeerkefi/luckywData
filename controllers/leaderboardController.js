@@ -8,10 +8,13 @@ const LEADERBOARD_DISCLOSURE =
 
 const BASE_PARAMS = {
   userId: process.env.USER_ID,
-  // Dice (house games) is part of the "provably fair" category and cannot be excluded
-  // via query params. Removing "provably fair" so only slots count toward the leaderboard.
-  categories: "slots",
+  categories: "slots,provably fair",
 };
+
+// Player favoriteGameId identifier for Dice — filtered out at the backend
+// because the Roobot affiliate API aggregates all provably fair games together
+// and cannot exclude individual game types via query params.
+const DICE_GAME_ID_PATTERN = /^housegames:dice$/i;
 
 // Helper for current leaderboard normalization at midnight UTC.
 function getNoonUTC(dateStr) {
@@ -32,6 +35,7 @@ async function fetchLeaderboardData(params) {
   });
 
   return response.data
+    .filter((player) => !DICE_GAME_ID_PATTERN.test(player.favoriteGameId))
     .map((player) => ({
       uid: player.uid,
       username: player.username,
