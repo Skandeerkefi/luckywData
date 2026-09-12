@@ -8,7 +8,9 @@ const LEADERBOARD_DISCLOSURE =
 
 const BASE_PARAMS = {
   userId: process.env.USER_ID,
-  categories: "slots,provably fair",
+  // Dice (house games) is part of the "provably fair" category and cannot be excluded
+  // via query params. Removing "provably fair" so only slots count toward the leaderboard.
+  categories: "slots",
 };
 
 // Helper for current leaderboard normalization at midnight UTC.
