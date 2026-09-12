@@ -17,8 +17,8 @@ const DEFAULT_PRIZE_SPLIT = [
 	{ rank: 11, amount: 90 },
 	{ rank: 12, amount: 80 },
 	{ rank: 13, amount: 70 },
-	{ rank: 14, amount: 65 },
-	{ rank: 15, amount: 45 },
+	{ rank: 14, amount: 60 },
+	{ rank: 15, amount: 50 },
 ];
 
 const CYCLE_START_DATE = new Date(Date.UTC(2026, 8, 8)); // 09/08/2026
