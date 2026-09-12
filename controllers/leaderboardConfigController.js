@@ -96,11 +96,29 @@ const mergeWindow = (existingWindow, windowValue) => {
 	return normalized;
 };
 
-const serializeConfig = (doc) => ({
-	current: doc?.current || buildDefaultCurrentWindow(),
-	previous: doc?.previous || buildDefaultPreviousWindow(),
-	updatedAt: doc?.updatedAt || null,
-});
+const serializeConfig = (doc) => {
+	// Always compute fresh windows so stale DB data can never override the schedule
+	const defaultCurrent = buildDefaultCurrentWindow();
+	const defaultPrevious = buildDefaultPreviousWindow();
+
+	// If DB has a saved config, keep its prizeSplit (admin may have customized it)
+	// but ALWAYS replace the dates with freshly computed ones
+	const preservedCurrent = doc?.current ? {
+		...defaultCurrent,
+		prizeSplit: normalizePrizeSplit(doc.current.prizeSplit),
+	} : defaultCurrent;
+
+	const preservedPrevious = doc?.previous ? {
+		...defaultPrevious,
+		prizeSplit: normalizePrizeSplit(doc.previous.prizeSplit),
+	} : defaultPrevious;
+
+	return {
+		current: preservedCurrent,
+		previous: preservedPrevious,
+		updatedAt: doc?.updatedAt || null,
+	};
+};
 
 exports.getLeaderboardConfig = async (req, res) => {
 	try {
