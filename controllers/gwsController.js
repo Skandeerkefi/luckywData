@@ -222,7 +222,7 @@ exports.getAllGWS = async (req, res) => {
 
 exports.getWagerDebugList = async (req, res) => {
 	try {
-		const period = getGwsFixedBiWeeklyPeriod();
+		const period = await getGwsFixedBiWeeklyPeriod();
 		const wagerList = await buildResolvedWagerList();
 		const sorted = wagerList.sort((a, b) => b.effectiveWager - a.effectiveWager);
 		res.json({

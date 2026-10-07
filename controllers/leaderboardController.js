@@ -14,14 +14,21 @@ const BASE_PARAMS = {
   gameIdentifiers: "-housegames:dice",
 };
 
-// Helper for current leaderboard normalization at midnight UTC.
-function getNoonUTC(dateStr) {
-  return new Date(dateStr + "T00:00:00.000Z").toISOString();
+// Date-only "YYYY-MM-DD" params normalize to UTC day boundaries. Full ISO
+// datetimes (length > 10) pass through untouched, so clients can query the
+// exact scheduled window ([startAt, statsEndAt]) instead of day approximations.
+function toStartInstant(dateStr) {
+  return dateStr.length > 10 ? dateStr : `${dateStr}T00:00:00.000Z`;
 }
 
-// Helper for previous leaderboard normalization at noon UTC.
-function getNoonUTCPrevious(dateStr) {
-  return new Date(dateStr + "T12:00:00.000Z").toISOString();
+function toEndInstant(dateStr) {
+  // End-of-day so the last day of a period is included in the stats.
+  return dateStr.length > 10 ? dateStr : `${dateStr}T23:59:59.999Z`;
+}
+
+// Legacy "previous" leaderboard normalization at noon UTC.
+function toPreviousInstant(dateStr) {
+  return dateStr.length > 10 ? dateStr : `${dateStr}T12:00:00.000Z`;
 }
 
 async function fetchLeaderboardData(params) {
@@ -58,8 +65,8 @@ const leaderboardController = {
 
       const params = { ...BASE_PARAMS };
 
-      if (startDate) params.startDate = getNoonUTC(startDate);
-      if (endDate) params.endDate = getNoonUTC(endDate);
+      if (startDate) params.startDate = toStartInstant(startDate);
+      if (endDate) params.endDate = toEndInstant(endDate);
 
       const processedData = await fetchLeaderboardData(params);
 
@@ -83,8 +90,8 @@ const leaderboardController = {
 
       const params = { ...BASE_PARAMS };
 
-      if (startDate) params.startDate = getNoonUTC(startDate);
-      if (endDate) params.endDate = getNoonUTC(endDate);
+      if (startDate) params.startDate = toStartInstant(startDate);
+      if (endDate) params.endDate = toEndInstant(endDate);
 
       const processedData = await fetchLeaderboardData(params);
 
@@ -108,8 +115,8 @@ const leaderboardController = {
 
       const params = { ...BASE_PARAMS };
 
-      if (startDate) params.startDate = getNoonUTCPrevious(startDate);
-      if (endDate) params.endDate = getNoonUTCPrevious(endDate);
+      if (startDate) params.startDate = toPreviousInstant(startDate);
+      if (endDate) params.endDate = toPreviousInstant(endDate);
 
       const processedData = await fetchLeaderboardData(params);
 

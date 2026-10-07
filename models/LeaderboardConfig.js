@@ -17,11 +17,24 @@ const leaderboardWindowSchema = new mongoose.Schema(
 	{ _id: false }
 );
 
+const scheduleSchema = new mongoose.Schema(
+	{
+		// HH:MM:SS at which each cycle boundary (stats end + cooldown start) is reached
+		resetTime: { type: String, default: "00:00:00" },
+		// IANA timezone the reset time is expressed in ("UTC", "Europe/Paris", ...)
+		timezone: { type: String, default: "UTC" },
+		// Cooldown after stats close, before the next cycle starts (hours)
+		cooldownHours: { type: Number, default: 24 },
+	},
+	{ _id: false }
+);
+
 const leaderboardConfigSchema = new mongoose.Schema(
 	{
 		key: { type: String, required: true, unique: true, default: "roobet" },
 		current: { type: leaderboardWindowSchema, default: null },
 		previous: { type: leaderboardWindowSchema, default: null },
+		schedule: { type: scheduleSchema, default: () => ({}) },
 	},
 	{ timestamps: true }
 );

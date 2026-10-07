@@ -1,4 +1,9 @@
 const { LeaderboardConfig } = require("../models/LeaderboardConfig");
+const {
+	DEFAULT_SCHEDULE,
+	normalizeSchedule,
+	computeLeaderboardWindows,
+} = require("../utils/leaderboardSchedule");
 
 const CONFIG_KEY = "roobet";
 
@@ -20,41 +25,6 @@ const DEFAULT_PRIZE_SPLIT = [
 	{ rank: 14, amount: 60 },
 	{ rank: 15, amount: 50 },
 ];
-
-const CYCLE_START_DATE = new Date(Date.UTC(2026, 8, 8)); // 09/08/2026
-const CYCLE_LENGTH_DAYS = 15;
-
-const toDateOnlyUtc = (date) => date.toISOString().split("T")[0];
-
-const buildDefaultCurrentWindow = () => {
-	const now = new Date();
-	const nowMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-	const diff = nowMs - CYCLE_START_DATE.getTime();
-	const cycleNum = Math.floor(diff / (CYCLE_LENGTH_DAYS * 86400000));
-	const start = new Date(CYCLE_START_DATE.getTime() + cycleNum * CYCLE_LENGTH_DAYS * 86400000);
-	const end = new Date(start.getTime() + (CYCLE_LENGTH_DAYS - 1) * 86400000);
-
-	return {
-		startDate: toDateOnlyUtc(start),
-		endDate: toDateOnlyUtc(end),
-		prizeSplit: DEFAULT_PRIZE_SPLIT,
-	};
-};
-
-const buildDefaultPreviousWindow = () => {
-	const current = buildDefaultCurrentWindow();
-	const currentStart = new Date(`${current.startDate}T00:00:00.000Z`);
-	const previousEnd = new Date(currentStart);
-	previousEnd.setUTCDate(previousEnd.getUTCDate() - 1);
-	const previousStart = new Date(previousEnd);
-	previousStart.setUTCDate(previousStart.getUTCDate() - CYCLE_LENGTH_DAYS + 1);
-
-	return {
-		startDate: toDateOnlyUtc(previousStart),
-		endDate: toDateOnlyUtc(previousEnd),
-		prizeSplit: DEFAULT_PRIZE_SPLIT.map((entry) => ({ ...entry })),
-	};
-};
 
 const normalizePrizeSplit = (prizeSplit) => {
 	if (!Array.isArray(prizeSplit) || prizeSplit.length === 0) {
@@ -97,25 +67,21 @@ const mergeWindow = (existingWindow, windowValue) => {
 };
 
 const serializeConfig = (doc) => {
-	// Always compute fresh windows so stale DB data can never override the schedule
-	const defaultCurrent = buildDefaultCurrentWindow();
-	const defaultPrevious = buildDefaultPreviousWindow();
+	// Windows are always computed fresh from the admin-configured schedule
+	// (reset time + timezone + cooldown) so stale DB dates can never win.
+	const schedule = normalizeSchedule(doc?.schedule ?? DEFAULT_SCHEDULE);
+	const windows = computeLeaderboardWindows(schedule, Date.now());
 
-	// If DB has a saved config, keep its prizeSplit (admin may have customized it)
-	// but ALWAYS replace the dates with freshly computed ones
-	const preservedCurrent = doc?.current ? {
-		...defaultCurrent,
-		prizeSplit: normalizePrizeSplit(doc.current.prizeSplit),
-	} : defaultCurrent;
-
-	const preservedPrevious = doc?.previous ? {
-		...defaultPrevious,
-		prizeSplit: normalizePrizeSplit(doc.previous.prizeSplit),
-	} : defaultPrevious;
+	// Keep admin-customized prize splits from the DB.
+	const currentPrizeSplit = normalizePrizeSplit(doc?.current?.prizeSplit);
+	const previousPrizeSplit = normalizePrizeSplit(
+		doc?.previous?.prizeSplit ?? doc?.current?.prizeSplit
+	);
 
 	return {
-		current: preservedCurrent,
-		previous: preservedPrevious,
+		current: { ...windows.current, prizeSplit: currentPrizeSplit },
+		previous: { ...windows.previous, prizeSplit: previousPrizeSplit },
+		schedule: windows.schedule,
 		updatedAt: doc?.updatedAt || null,
 	};
 };
@@ -132,23 +98,35 @@ exports.getLeaderboardConfig = async (req, res) => {
 
 exports.saveLeaderboardConfig = async (req, res) => {
 	try {
-		const { current, previous, archiveCurrent } = req.body || {};
+		const { current, previous, archiveCurrent, schedule } = req.body || {};
 
 		let doc = await LeaderboardConfig.findOne({ key: CONFIG_KEY });
 		if (!doc) {
 			doc = new LeaderboardConfig({ key: CONFIG_KEY });
 		}
 
-		const normalizedCurrent = normalizeWindow(current);
+		// `current` is optional — when omitted the existing window is kept, so
+		// admins can save just the schedule settings (reset time/timezone/cooldown).
+		if (current) {
+			doc.current = normalizeWindow(current);
+		}
+
 		const normalizedPrevious = mergeWindow(
 			doc.previous,
 			previous || (archiveCurrent ? doc.current : undefined)
 		);
 
-		doc.current = normalizedCurrent;
 		if (normalizedPrevious) {
 			doc.previous = normalizedPrevious;
 		}
+
+		// Admin may change the LB reset time / timezone / cooldown.
+		if (schedule !== undefined) {
+			doc.schedule = normalizeSchedule(schedule);
+		} else if (!doc.schedule) {
+			doc.schedule = normalizeSchedule(DEFAULT_SCHEDULE);
+		}
+
 		await doc.save();
 
 		res.json({

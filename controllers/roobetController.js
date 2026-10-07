@@ -1,22 +1,33 @@
 const axios = require("axios");
+const { LeaderboardConfig } = require("../models/LeaderboardConfig");
+const {
+	DEFAULT_SCHEDULE,
+	normalizeSchedule,
+	computeLeaderboardWindows,
+} = require("../utils/leaderboardSchedule");
 
 const DEFAULT_ROOBET_BASE_URL = "https://roobetconnect.com";
 
-// Bi-weekly (15-day) Roobet leaderboard — auto-rotates every 15 days from 09/08/2026
-const getCurrentLeaderboardPeriod = () => {
-	const now = new Date();
-	const nowMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-	const cycleStart = new Date(Date.UTC(2026, 8, 8)); // 09/08/2026
-	const cycleLength = 15 * 86400000;
+// Bi-weekly (15-day) Roobet leaderboard — boundaries follow the admin schedule
+// (reset time + timezone + cooldown, default 00:00:00 UTC + 24h cooldown)
+// anchored at 09/08/2026.
+const getCurrentLeaderboardPeriod = async () => {
+	let schedule = DEFAULT_SCHEDULE;
+	try {
+		const doc = await LeaderboardConfig.findOne({ key: "roobet" });
+		schedule = normalizeSchedule(doc?.schedule ?? DEFAULT_SCHEDULE);
+	} catch (error) {
+		console.error(
+			"Failed to load leaderboard schedule, using defaults:",
+			error.message
+		);
+		schedule = DEFAULT_SCHEDULE;
+	}
 
-	const diff = nowMs - cycleStart.getTime();
-	const cycleNum = Math.floor(diff / cycleLength);
-	const start = new Date(cycleStart.getTime() + cycleNum * cycleLength);
-	const end = new Date(start.getTime() + (15 - 1) * 86400000);
-
+	const windows = computeLeaderboardWindows(schedule, Date.now());
 	return {
-		startDate: start.toISOString(),
-		endDate: end.toISOString(),
+		startDate: windows.current.startAt,
+		endDate: windows.current.statsEndAt,
 	};
 };
 
@@ -70,7 +81,7 @@ const fetchRoobetAffiliateStats = async ({
 exports.fetchRoobetAffiliateStats = fetchRoobetAffiliateStats;
 
 const fetchRoobetAffiliateStatsFixedMonthly = async () => {
-	const { startDate, endDate } = getCurrentLeaderboardPeriod();
+	const { startDate, endDate } = await getCurrentLeaderboardPeriod();
 	return fetchRoobetAffiliateStats({
 		startDate,
 		endDate,
