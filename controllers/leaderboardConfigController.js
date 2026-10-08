@@ -80,7 +80,9 @@ const serializeConfig = (doc) => {
 
 	return {
 		current: { ...windows.current, prizeSplit: currentPrizeSplit },
-		previous: { ...windows.previous, prizeSplit: previousPrizeSplit },
+		previous: doc?.previous?.startDate
+			? { startDate: doc.previous.startDate, endDate: doc.previous.endDate, prizeSplit: previousPrizeSplit }
+			: { ...windows.previous, prizeSplit: previousPrizeSplit },
 		schedule: windows.schedule,
 		updatedAt: doc?.updatedAt || null,
 	};
