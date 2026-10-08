@@ -11,7 +11,7 @@
 
 const DAY_MS = 86400000;
 
-const ANCHOR_DATE_DEFAULT = "2026-09-08"; // first cycle start date (in the schedule timezone)
+const ANCHOR_DATE_DEFAULT = "2026-10-08"; // first cycle start date (in the schedule timezone)
 const CYCLE_DAYS = 15;
 
 const DEFAULT_SCHEDULE = {
@@ -104,7 +104,13 @@ const normalizeSchedule = (input) => {
 	let anchorDate = String(source.anchorDate ?? ANCHOR_DATE_DEFAULT).trim();
 	if (!/^\d{4}-\d{2}-\d{2}$/.test(anchorDate)) anchorDate = ANCHOR_DATE_DEFAULT;
 
-	return { resetTime, timezone, cooldownHours, anchorDate };
+	let startDate = String(source.startDate ?? "").trim();
+	if (startDate && !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) startDate = "";
+
+	let endDate = String(source.endDate ?? "").trim();
+	if (endDate && !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) endDate = "";
+
+	return { resetTime, timezone, cooldownHours, anchorDate, startDate, endDate };
 };
 
 // Compute the current + previous leaderboard windows for a schedule.
@@ -118,8 +124,18 @@ const computeLeaderboardWindows = (rawSchedule, nowMs = Date.now()) => {
 		schedule.timezone
 	);
 
-	const index = Math.max(0, Math.floor((nowMs - anchorMs) / periodMs));
-	const cycleStartMs = anchorMs + index * periodMs;
+	// Admin-override: explicit start/end dates take full control of the current cycle.
+	let cycleStartMs;
+	let cycleDurationMs = CYCLE_DAYS * DAY_MS;
+	if (schedule.startDate) {
+		cycleStartMs = zonedDateAtTimeToUtc(schedule.startDate, schedule.resetTime, schedule.timezone);
+	} else {
+		const index = Math.max(0, Math.floor((nowMs - anchorMs) / periodMs));
+		cycleStartMs = anchorMs + index * periodMs;
+	}
+	if (schedule.endDate) {
+		cycleDurationMs = zonedDateAtTimeToUtc(schedule.endDate, "23:59:59", schedule.timezone) - cycleStartMs + DAY_MS;
+	}
 
 	const buildWindow = (startMs, statsEndMs, resetMs) => {
 		const phase =
@@ -139,7 +155,7 @@ const computeLeaderboardWindows = (rawSchedule, nowMs = Date.now()) => {
 	return {
 		current: buildWindow(
 			cycleStartMs,
-			cycleStartMs + CYCLE_DAYS * DAY_MS,
+			cycleStartMs + cycleDurationMs,
 			cycleStartMs + periodMs
 		),
 		previous: buildWindow(
