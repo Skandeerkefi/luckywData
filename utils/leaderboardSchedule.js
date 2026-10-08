@@ -11,7 +11,7 @@
 
 const DAY_MS = 86400000;
 
-const ANCHOR_DATE = "2026-09-08"; // first cycle start date (in the schedule timezone)
+const ANCHOR_DATE_DEFAULT = "2026-09-08"; // first cycle start date (in the schedule timezone)
 const CYCLE_DAYS = 15;
 
 const DEFAULT_SCHEDULE = {
@@ -101,7 +101,10 @@ const normalizeSchedule = (input) => {
 	}
 	cooldownHours = Math.min(Math.round(cooldownHours * 10) / 10, 336); // 2-week cap
 
-	return { resetTime, timezone, cooldownHours };
+	let anchorDate = String(source.anchorDate ?? ANCHOR_DATE_DEFAULT).trim();
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(anchorDate)) anchorDate = ANCHOR_DATE_DEFAULT;
+
+	return { resetTime, timezone, cooldownHours, anchorDate };
 };
 
 // Compute the current + previous leaderboard windows for a schedule.
@@ -110,7 +113,7 @@ const computeLeaderboardWindows = (rawSchedule, nowMs = Date.now()) => {
 	const periodMs =
 		CYCLE_DAYS * DAY_MS + schedule.cooldownHours * 3600 * 1000;
 	const anchorMs = zonedDateAtTimeToUtc(
-		ANCHOR_DATE,
+		schedule.anchorDate,
 		schedule.resetTime,
 		schedule.timezone
 	);
@@ -144,13 +147,13 @@ const computeLeaderboardWindows = (rawSchedule, nowMs = Date.now()) => {
 			cycleStartMs - periodMs + CYCLE_DAYS * DAY_MS,
 			cycleStartMs
 		),
-		schedule: { ...schedule, anchor: ANCHOR_DATE, cycleDays: CYCLE_DAYS },
+		schedule: { ...schedule, anchor: ANCHOR_DATE_DEFAULT, cycleDays: CYCLE_DAYS },
 	};
 };
 
 module.exports = {
 	DAY_MS,
-	ANCHOR_DATE,
+	ANCHOR_DATE_DEFAULT,
 	CYCLE_DAYS,
 	DEFAULT_SCHEDULE,
 	normalizeSchedule,
